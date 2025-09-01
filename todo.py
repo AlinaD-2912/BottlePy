@@ -2,9 +2,26 @@ import sqlite3
 from bottle import Bottle
 from bottle import Bottle, template
 from bottle import request
+from bottle import static_file
+from bottle import redirect
+
+from pathlib import Path
+
+ABSOLUTE_APPLICATION_PATH = Path(__file__).parent
+# ABSOLUTE_APPLICATION_PATH = Path(__file__).parent[0]
 
 
 app = Bottle()
+
+@app.route('/static/<filepath:path>')
+def send_static_file(filepath):
+    ROOT_PATH = ABSOLUTE_APPLICATION_PATH / 'static'
+    return static_file(filepath, root=ROOT_PATH)
+
+# Redirection of /
+@app.route('/')
+def index():
+    redirect('/todo')
 
 # @app.route('/todo')
 # def todo_list():
@@ -18,6 +35,9 @@ app = Bottle()
 #         output = template('show_tasks', rows=result)
 #         return output
 
+
+
+# Show all the tasks
 @app.get('/todo')
 def todo_list():
     show  = request.query.show or 'open'
@@ -38,6 +58,75 @@ def todo_list():
     output = template('show_tasks.tpl', rows=result)
     return output
 # url to use :              http://127.0.0.1:8080/todo?show=all
+
+
+
+# Add new task
+@app.route('/new', method=['GET', 'POST'])
+def new_task():
+    if request.POST:
+        # The code here is only executed if POST data, e.g. from a
+        # HTML form, is inside the request.
+        new_task = request.forms.task.strip()
+        with sqlite3.connect('/home/user/todo.db') as connection:
+            cursor = connection.cursor()
+            cursor.execute("INSERT INTO todo (task,status) VALUES (?,?)", (new_task, 1))
+            new_id = cursor.lastrowid
+        return template('message.tpl',
+            message=f'The new task was inserted into the database, the ID is {new_id}')
+    else:
+        # the code here is only executed if no POST data was received.
+        return template('new_task.tpl')
+
+
+
+# Editing task
+@app.route('/edit/<number:int>', method=['GET', 'POST'])
+def edit_task(number):
+    if request.POST:
+        new_data = request.forms.task.strip()
+        status = request.forms.status.strip()
+        if status == 'open':
+            status = 1
+        else:
+            status = 0
+        with sqlite3.connect('/home/user/todo.db') as connection:
+            cursor = connection.cursor()
+            cursor.execute("UPDATE todo SET task = ?, status = ? WHERE id LIKE ?", (new_data, status, number))
+        return template('message.tpl',
+            message=f'The task number {number} was successfully updated')
+    else:
+        with sqlite3.connect('/home/user/todo.db') as connection:
+            cursor = connection.cursor()
+            cursor.execute("SELECT task FROM todo WHERE id LIKE ?", (number,))
+            current_data = cursor.fetchone()
+        return template('edit_task', current_data=current_data, number=number)
+# url to use : http://127.0.0.1:8080/edit/5
+
+
+# Returning json data
+@app.route('/as_json/<number:re:[0-9]+>')
+def task_as_json(number):
+    with sqlite3.connect('/home/user/todo.db') as connection:
+        cursor = connection.cursor()
+        cursor.execute("SELECT id, task, status FROM todo WHERE id LIKE ?", (number,))
+        result = cursor.fetchone()
+    if not result:
+        return {'task': 'This task ID number does not exist!'}
+    else:
+        return {'id': result[0], 'task': result[1], 'status': result[2]}
+# url to use :    http://127.0.0.1:8080/as_json/5
+
+
+@app.error(404)
+def error_404(error):
+    return 'Sorry, this page does not exist!'
+
+error = app.error
+@app.error(404)
+@error(403)
+def something_went_wrong(error):
+    return f'{error}: There is something wrong!'
 
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=8080)

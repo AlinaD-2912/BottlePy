@@ -28,6 +28,13 @@ J’ai suivi le tutoriel officiel et créé une application simple de **To-Do Li
 ##  Installation
 
 1. Cloner le dépôt :
-   ```bash
+ ``` bash
    git clone https://github.com/AlinaD-2912/BottlePy.git
    cd BottlePy
+
+```
+
+2. Lancez le programme :
+ ```bash
+python main.py
+```
